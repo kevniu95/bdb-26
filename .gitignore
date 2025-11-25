@@ -1,0 +1,7 @@
+kaggle_evaluation/*
+data/*
+__pycache__/
+*.pyc
+.DS_Store
+*.csv
+settings.json
