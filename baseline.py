@@ -153,7 +153,7 @@ if __name__ == "__main__":
 
     rmse, play_details = evaluate_predictions(
         predict_fn=predict,
-        generate_predictions_standardized=generate_predictions_standardized_velocity,
+        generate_predictions_standardized=generate_predictions_last_known_position,
         input_df=input_df,
         output_df=output_df,
         verbose=True,
