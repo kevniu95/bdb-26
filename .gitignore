@@ -5,3 +5,5 @@ __pycache__/
 .DS_Store
 *.csv
 settings.json
+*.pth
+*.png

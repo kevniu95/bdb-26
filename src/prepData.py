@@ -59,7 +59,6 @@ def load_output_data(through_week: int = 18) -> pd.DataFrame:
 
 
 def normalize_input_fields(input_df: pd.DataFrame) -> pd.DataFrame:
-
     # Normalize field direction and other stuff
 
     # 1. Flip so all plays go left to right
@@ -72,6 +71,9 @@ def normalize_input_fields(input_df: pd.DataFrame) -> pd.DataFrame:
     L = 120  # field length in yards
     W = 53.3  # field width in yards
 
+    # ============
+    # Standardize basic fields
+    # ============
     input_df["absolute_yardline_number_std"] = np.where(
         input_df["play_direction"] == "left",
         L - input_df["absolute_yardline_number"],
@@ -111,6 +113,68 @@ def normalize_input_fields(input_df: pd.DataFrame) -> pd.DataFrame:
         (input_df["dir"] + 180) % 360,
         input_df["dir"],
     )
+
+    # ============
+    # Standardize ball land fields
+    # First seen from:
+    # https://www.kaggle.com/code/hiwe0305/nfl-big-data-baseline
+    # ============
+
+    input_df["dx_ball"] = input_df["ball_land_x_std"] - input_df["x_std"]
+    input_df["dy_ball"] = input_df["ball_land_y_std"] - input_df["y_std"]
+
+    input_df["dist_ball"] = (
+        np.sqrt(input_df["dx_ball"] ** 2 + input_df["dy_ball"] ** 2) + 1e-6
+    )
+
+    input_df["angle_to_ball"] = (
+        90 - np.degrees(np.arctan2(input_df["dy_ball"], input_df["dx_ball"]))
+    ) % 360
+
+    def angle_diff(a, b):
+        # a, b in degrees
+        return ((a - b + 180) % 360) - 180
+
+    input_df["angle_to_ball_minus_dir"] = angle_diff(
+        input_df["angle_to_ball"], input_df["dir_std"]
+    )
+    input_df["angle_to_ball_minus_o"] = angle_diff(
+        input_df["angle_to_ball"], input_df["o_std"]
+    )
+
+    # Calculate speed in directions
+    dir_rad = np.deg2rad(input_df["dir_std"])
+    input_df["s_x_std"] = input_df["s"] * np.sin(dir_rad)
+    input_df["s_y_std"] = input_df["s"] * np.cos(dir_rad)
+
+    ux = input_df["dx_ball"] / input_df["dist_ball"]
+    uy = input_df["dy_ball"] / input_df["dist_ball"]
+
+    input_df["s_parallel"] = input_df["s_x_std"] * ux + input_df["s_y_std"] * uy
+    input_df["s_perp"] = input_df["s_x_std"] * (-uy) + input_df["s_y_std"] * (ux)
+
+    for col in [
+        "dir_std",
+        "o_std",
+        "angle_to_ball",
+        "angle_to_ball_minus_dir",
+        "angle_to_ball_minus_o",
+    ]:
+        rad = np.deg2rad(input_df[col])
+        input_df[col + "_sin"] = np.sin(rad)
+        input_df[col + "_cos"] = np.cos(rad)
+
+    def height_to_inches(col):
+        # col: pandas Series of "6-1" strings
+        split_vals = col.str.split("-", expand=True)
+        feet = split_vals[0].astype(float)
+        inches = split_vals[1].astype(float)
+        return feet * 12 + inches
+
+    input_df["height_in"] = height_to_inches(input_df["player_height"])
+    # Age in years (super rough)
+    input_df["birth_year"] = pd.to_datetime(input_df["player_birth_date"]).dt.year
+
     return input_df
 
 

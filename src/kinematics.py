@@ -5,6 +5,41 @@ SAMPLE_RATE_HZ = 10.0
 DT_PER_FRAME = 1.0 / SAMPLE_RATE_HZ  # 0.1 s at 10 Hz
 
 
+def calculate_speed_and_direction(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calculate s (speed in yd/s) and dir (direction in degrees) from x, y positions
+    Follows the groupby pattern from your existing notebook
+
+    Returns:
+        DataFrame with original columns plus 's' and 'dir'
+    """
+    df = df.copy()
+    df = df.sort_values(["game_id", "play_id", "nfl_id", "frame_id"])
+    og_cols = df.columns.tolist()
+
+    keys = ["game_id", "play_id", "nfl_id"]
+    SAMPLE_RATE_HZ = 10.0  # 10 frames per second
+    DT_PER_FRAME = 1.0 / SAMPLE_RATE_HZ  # 0.1 seconds
+
+    # Calculate velocities using grouped operations
+    df["dx"] = df.groupby(keys)["x"].diff()
+    df["dy"] = df.groupby(keys)["y"].diff()
+    df["dt"] = df.groupby(keys)["frame_id"].diff() * DT_PER_FRAME
+
+    # Velocity components (yards/second)
+    df["vx"] = df["dx"] / df["dt"]
+    df["vy"] = df["dy"] / df["dt"]
+
+    # Speed (magnitude of velocity vector)
+    df["s"] = np.sqrt(df["vx"] ** 2 + df["vy"] ** 2)
+
+    # Direction (0° = East, 90° = North, following NFL convention)
+    # Using (450 - arctan2) to convert from math convention to compass/NFL convention
+    df["dir"] = (450.0 - np.degrees(np.arctan2(df["vy"], df["vx"]))) % 360.0
+
+    return df[og_cols + ["s", "dir"]]
+
+
 def add_kinematics(df: pd.DataFrame, smooth_window: int = 1) -> pd.DataFrame:
     """
     Adds vx, vy, s (yd/s), s_mph, ax, ay, a (yd/s^2), and dir (deg) to the dataframe.
